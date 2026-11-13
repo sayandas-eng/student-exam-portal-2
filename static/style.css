@@ -1,0 +1,44 @@
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#202938;background:#f5f7fa;font-synthesis:none}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;flex-direction:column}header{height:64px;background:#fff;border-bottom:1px solid #e4e8ee;display:flex;align-items:center;justify-content:space-between;padding:0 max(5vw,20px)}.brand{font-weight:700;color:#1f2937;text-decoration:none}nav{display:flex;align-items:center;gap:18px;color:#657184;font-size:14px}nav form{margin:0}main{width:min(1050px,92%);margin:42px auto;flex:1}footer{text-align:center;padding:22px;color:#8993a2;font-size:12px;border-top:1px solid #e7ebf0;background:#fff}.hero{text-align:center;padding:100px 15px}.hero h1{font-size:42px;margin:10px 0}.hero p:not(.eyebrow){color:#687386}.eyebrow{font-size:11px;font-weight:700;letter-spacing:1.5px;color:#64748b}.actions{display:flex;justify-content:center;gap:12px;margin-top:28px}.btn{display:inline-flex;align-items:center;justify-content:center;background:#2457a6;color:white;border:0;border-radius:7px;padding:11px 17px;font-weight:600;text-decoration:none;cursor:pointer;font-size:14px}.btn:hover{background:#194786}.btn.secondary{background:#fff;color:#334155;border:1px solid #d5dce5}.panel{background:#fff;border:1px solid #e4e9f0;border-radius:10px;padding:22px;margin:18px 0;box-shadow:0 2px 8px #16263b08}.narrow{max-width:430px;margin:60px auto}.panel h2{font-size:18px;margin:0 0 12px}.panel h1{margin:8px 0 22px}.panel form{display:grid;gap:14px}label{display:grid;gap:7px;font-size:13px;font-weight:600;color:#465266}input,textarea{width:100%;border:1px solid #d7dee8;border-radius:6px;padding:10px 11px;font:inherit;color:#202938;background:#fff}input:focus,textarea:focus{outline:2px solid #c9dcfb;border-color:#6594d8}form .btn{justify-self:start}.muted{color:#788496;font-size:13px}.small{font-size:12px}.flash{background:#fff7e6;border:1px solid #f3d99d;padding:8px 15px;border-radius:7px;color:#755719}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0}.stat{background:#fff;border:1px solid #e4e9f0;padding:18px;border-radius:9px;display:grid;gap:5px}.stat b{font-size:26px}.stat span{font-size:12px;color:#7b8797}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.inline{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pagehead,.examtop{display:flex;align-items:center;justify-content:space-between;gap:20px}.pagehead h1,.examtop h1{margin:5px 0 15px}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:12px;border-bottom:1px solid #edf0f4;white-space:nowrap}th{color:#6c7788;font-size:11px;text-transform:uppercase;letter-spacing:.5px}.pill{display:inline-block;background:#edf2f8;color:#43536a;padding:5px 9px;border-radius:20px;font-size:11px}.smallbtn,.linkbtn{background:none;border:0;color:#2457a6;cursor:pointer;font-weight:600}.examrow{display:flex;align-items:center;justify-content:space-between;gap:15px}.examrow h2{margin:0}.timerbox{background:#fff;border:1px solid #dce4ef;border-radius:8px;padding:10px 14px;font-size:12px;color:#66758a}.timerbox strong{display:block;font-size:21px;color:#1f2937}.notice{background:#edf4ff;color:#34547d;border:1px solid #d6e5fa;padding:10px 13px;border-radius:7px;font-size:12px;margin:12px 0}.question{margin:14px 0}.qmeta{display:flex;justify-content:space-between;color:#66758a;font-size:12px}.prompt{font-size:16px;line-height:1.55;margin:16px 0}.option{display:flex;grid-template-columns:auto 1fr;align-items:center;gap:9px;padding:8px 0;font-weight:400}.option input{width:auto}.answer{margin-top:5px}.save-state{font-size:11px;color:#66806d}.submit{margin-top:10px}.center{text-align:center}.center .btn{margin-top:12px}@media(max-width:700px){main{margin:24px auto}.hero{padding:65px 8px}.hero h1{font-size:32px}.grid2,.stats{grid-template-columns:1fr}.pagehead,.examtop{align-items:flex-start;flex-direction:column}.examrow{align-items:flex-start;flex-direction:column}.inline{grid-template-columns:1fr}}
+
+/* Mobile and tablet improvements */
+html{ -webkit-text-size-adjust:100%; }
+button,.btn,input,textarea{touch-action:manipulation}
+.question{min-width:0;overflow-wrap:anywhere}
+.option{align-items:flex-start;line-height:1.45}
+.option input{flex:0 0 auto;margin-top:3px;min-width:18px;min-height:18px}
+textarea{resize:vertical;min-height:110px}
+@media(max-width:700px){
+ header{height:auto;min-height:58px;padding:12px 4%;gap:10px;flex-wrap:wrap}
+ nav{gap:10px;flex-wrap:wrap}
+ main{width:94%;margin:16px auto}
+ .panel{padding:16px;margin:12px 0}
+ .examtop{gap:10px}
+ .timerbox{position:sticky;top:8px;z-index:5;align-self:stretch;text-align:center}
+ .timerbox strong{font-size:24px}
+ .prompt{font-size:16px}
+ .btn{min-height:44px}
+ .submit{width:100%;position:sticky;bottom:8px;z-index:4;box-shadow:0 2px 12px #16263b22}
+ table{min-width:620px}
+}
+
+/* Exam controls and compact-phone layout */
+.exam-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 16px}
+html,body{max-width:100%;overflow-x:hidden}
+button,input,textarea,select{font-size:16px}
+@media(max-width:480px){
+  header{align-items:flex-start}
+  .brand{font-size:15px}
+  nav{font-size:13px}
+  .hero{padding:48px 4px}
+  .hero h1{font-size:28px;line-height:1.2}
+  .actions{flex-direction:column;align-items:stretch}
+  .actions .btn{width:100%}
+  .pagehead h1,.examtop h1{font-size:25px}
+  .question{padding:14px}
+  .qmeta{gap:8px}
+  .prompt{font-size:16px}
+  .exam-controls{align-items:stretch;flex-direction:column}
+  .exam-controls .btn{width:100%}
+  .timerbox{position:sticky;top:4px}
+  .submit{min-height:48px}
+}
