@@ -358,11 +358,6 @@ def results():
         ''').fetchall()
 
     return render_template('results.html', rows=rows)
-
-
-@app.route('/admin/export.xlsx')
-@admin_required
-def export_results():
     
 @app.route('/admin/export.xlsx')
 @admin_required
