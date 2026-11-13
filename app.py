@@ -329,10 +329,6 @@ def publish_exam(exam_id):
 def close_exam(exam_id):
     with db() as c: c.execute("UPDATE exams SET status='closed' WHERE id=?",(exam_id,))
     flash('Examination closed.'); return redirect(url_for('dashboard'))
-
-@app.route('/admin/results')
-@admin_required
-def results():
     
 @app.route('/admin/results')
 @admin_required
