@@ -333,30 +333,100 @@ def close_exam(exam_id):
 @app.route('/admin/results')
 @admin_required
 def results():
+    
+@app.route('/admin/results')
+@admin_required
+def results():
     with db() as c:
-        rows=c.execute('''SELECT a.id attempt_id,e.title,s.username,a.status,a.submitted_at,
-        COALESCE(SUM(r.marks_awarded),0) score,
-        (SELECT COALESCE(SUM(q2.marks),0) FROM questions q2 WHERE q2.exam_id=a.exam_id) total
-        FROM attempts a JOIN exams e ON e.id=a.exam_id JOIN students s ON s.id=a.student_id
-        LEFT JOIN responses r ON r.attempt_id=a.id
-        GROUP BY a.id ORDER BY a.id DESC''').fetchall()
+        rows = c.execute('''
+            SELECT
+                a.id AS attempt_id,
+                e.title,
+                s.username,
+                a.status,
+                a.submitted_at,
+                COALESCE(
+                    (SELECT SUM(r.marks_awarded)
+                     FROM responses r
+                     WHERE r.attempt_id = a.id), 0
+                ) AS score,
+                COALESCE(
+                    (SELECT SUM(q.marks)
+                     FROM questions q
+                     WHERE q.exam_id = a.exam_id), 0
+                ) AS total
+            FROM attempts a
+            JOIN exams e ON e.id = a.exam_id
+            JOIN students s ON s.id = a.student_id
+            ORDER BY a.id DESC
+        ''').fetchall()
+
     return render_template('results.html', rows=rows)
+
 
 @app.route('/admin/export.xlsx')
 @admin_required
 def export_results():
-    wb=Workbook(); ws=wb.active; ws.title='Results'
-    ws.append(['Username','Examination','Status','Obtained Marks','Total Marks','Percentage','Submitted At'])
+    
+@app.route('/admin/export.xlsx')
+@admin_required
+def export_results():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Results'
+
+    ws.append([
+        'Username', 'Examination', 'Status',
+        'Obtained Marks', 'Total Marks',
+        'Percentage', 'Submitted At'
+    ])
+
     with db() as c:
-        rows=c.execute('''SELECT s.username,e.title,a.status,a.submitted_at,COALESCE(SUM(r.marks_awarded),0) score,
-        COALESCE((SELECT SUM(marks) FROM questions WHERE exam_id=e.id),0) total
-        FROM attempts a JOIN exams e ON e.id=a.exam_id JOIN students s ON s.id=a.student_id
-        LEFT JOIN responses r ON r.attempt_id=a.id GROUP BY a.id ORDER BY s.username''').fetchall()
+        rows = c.execute('''
+            SELECT
+                s.username,
+                e.title,
+                a.status,
+                a.submitted_at,
+                COALESCE(
+                    (SELECT SUM(r.marks_awarded)
+                     FROM responses r
+                     WHERE r.attempt_id = a.id), 0
+                ) AS score,
+                COALESCE(
+                    (SELECT SUM(q.marks)
+                     FROM questions q
+                     WHERE q.exam_id = a.exam_id), 0
+                ) AS total
+            FROM attempts a
+            JOIN exams e ON e.id = a.exam_id
+            JOIN students s ON s.id = a.student_id
+            ORDER BY s.username
+        ''').fetchall()
+
         for r in rows:
-            pct=(r['score']/r['total']*100) if r['total'] else 0
-            ws.append([r['username'],r['title'],r['status'],r['score'],r['total'],round(pct,2),r['submitted_at']])
-    out=io.BytesIO(); wb.save(out); out.seek(0)
-    return send_file(out,as_attachment=True,download_name='exam_results.xlsx',mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            pct = (r['score'] / r['total'] * 100) if r['total'] else 0
+
+            ws.append([
+                r['username'],
+                r['title'],
+                r['status'],
+                r['score'],
+                r['total'],
+                round(pct, 2),
+                r['submitted_at']
+            ])
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+
+    return send_file(
+        out,
+        as_attachment=True,
+        download_name='exam_results.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 @app.route('/admin/attempt/<int:attempt_id>')
 @admin_required
