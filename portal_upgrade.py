@@ -3,7 +3,7 @@
 Loaded by wsgi.py after the legacy schema has been initialized. Keeps existing
 attempts/results intact and adds the new name/class + exam-code workflow.
 """
-import os, json, secrets, re, io
+import os, json, secrets, re, io, base64
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import request, session, redirect, url_for, flash, render_template, jsonify, send_file, abort
@@ -134,7 +134,7 @@ def register(app):
                                   (generate_password_hash(password),exam_limit,iso(now())))
                     gid=cur.fetchone()["id"]
                 code=secrets.token_urlsafe(6).replace("-","").replace("_","").upper()[:10]
-                cur=c.execute("INSERT INTO exams(title,duration,review_minutes,status,created_at,exam_code,access_password_hash,access_group_id,class_level) VALUES(?,?,?,'published',?,?,?,?,?) RETURNING id",
+                cur=c.execute("INSERT INTO exams(title,duration,review_minutes,status,created_at,exam_code,access_password_hash,access_group_id,class_level) VALUES(?,?,?,'draft',?,?,?,?,?) RETURNING id",
                               (title,duration,review,iso(now()),code,generate_password_hash(password),gid,grade))
                 eid=cur.fetchone()["id"]
                 for n,q in enumerate(questions,1):
@@ -142,7 +142,7 @@ def register(app):
                     c.execute("INSERT INTO questions(exam_id,q_no,prompt,qtype,options,answer,marks) VALUES(?,?,?,?,?,?,?)",
                               (eid,n,str(q["question"]),q["type"],opts,str(q.get("answer") or ""),float(q["marks"])))
                 c.execute("UPDATE portal_access_groups SET exams_created=exams_created+1 WHERE id=?",(gid,))
-            return jsonify(ok=True,exam_id=eid,exam_code=code,title=title,question_count=len(questions),status="published")
+            return jsonify(ok=True,exam_id=eid,exam_code=code,title=title,question_count=len(questions),status="draft")
         except Exception as ex:
             app.logger.exception("Gemini exam creation failed")
             return jsonify(ok=False,error=str(ex)[:500]),500
@@ -237,6 +237,104 @@ def register(app):
         with app.test_request_context("/admin/gemini/create-exam",method="POST",json=data):
             # MCP calls the same validated Gemini creation workflow.
             return generate_exam()
+
+    # MCP Excel intake: creates a DRAFT only. A teacher must review and publish it.
+    @app.post("/api/mcp/exams/upload")
+    @mcp_auth
+    def mcp_upload_exam_excel():
+        data = request.get_json(force=True)
+        title = str(data.get("title", "")).strip()[:180]
+        grade = str(data.get("class_level", "")).strip()
+        duration = max(1, min(int(data.get("duration", 45)), 240))
+        review = max(0, min(int(data.get("review", 0)), 60))
+        password = str(data.get("shared_password", "")).strip()
+        exam_limit = max(1, min(int(data.get("password_exam_limit", 1)), 100))
+        encoded = str(data.get("workbook_base64", "")).strip()
+        filename = str(data.get("file_name", "exam.xlsx")).lower()
+        if not title or grade not in [f"Class {i}" for i in range(5, 13)] or not password:
+            return jsonify(ok=False, error="Valid title, Class 5–12 and shared password are required."), 400
+        if not filename.endswith(".xlsx") or not encoded:
+            return jsonify(ok=False, error="Provide an .xlsx workbook as workbook_base64."), 400
+        if len(encoded) > 7_000_000:
+            return jsonify(ok=False, error="Workbook is too large. Maximum encoded size is 7 MB."), 413
+        try:
+            from openpyxl import load_workbook
+            raw = base64.b64decode(encoded, validate=True)
+            if len(raw) > 5 * 1024 * 1024:
+                raise ValueError("Workbook exceeds the 5 MB limit.")
+            workbook = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            sheet = workbook.active
+            rows = sheet.iter_rows(values_only=True)
+            header_row = next(rows, None)
+            if not header_row:
+                raise ValueError("The workbook is empty.")
+            headers = [str(v).strip().lower() if v is not None else "" for v in header_row]
+            indexes = {name: i for i, name in enumerate(headers) if name}
+            required = ("question", "type", "marks", "answer")
+            missing = [name for name in required if name not in indexes]
+            if missing:
+                raise ValueError("Missing required Excel columns: " + ", ".join(missing))
+            questions = []
+            for row in rows:
+                def cell(name, default=""):
+                    i = indexes.get(name)
+                    return str(row[i]).strip() if i is not None and i < len(row) and row[i] is not None else default
+                prompt = cell("question")
+                if not prompt:
+                    continue
+                kind = cell("type").lower().replace(" ", "_")
+                if kind in ("multiple_choice", "multiple choice", "mcq"):
+                    kind = "mcq"
+                elif kind in ("fill_in_the_blank", "fill_blank", "fill"):
+                    kind = "fill"
+                elif kind in ("short_answer", "long_answer", "writing", "text"):
+                    kind = "text"
+                else:
+                    raise ValueError("Unsupported question type for: " + prompt[:80])
+                try:
+                    marks = float(cell("marks"))
+                except Exception:
+                    raise ValueError("Invalid marks for: " + prompt[:80])
+                if marks <= 0:
+                    raise ValueError("Marks must be greater than zero.")
+                options = [cell(k) for k in ("option_a", "option_b", "option_c", "option_d") if cell(k)]
+                answer = cell("answer")
+                if not answer:
+                    raise ValueError("Missing answer key for: " + prompt[:80])
+                if kind == "mcq" and len(options) < 2:
+                    raise ValueError("MCQ needs at least two options: " + prompt[:80])
+                questions.append({"question": prompt, "type": kind, "marks": marks, "answer": answer, "options": options})
+            workbook.close()
+            if not questions or len(questions) > 100:
+                raise ValueError("Workbook must contain between 1 and 100 valid questions.")
+            with db() as c:
+                groups = c.execute("SELECT * FROM portal_access_groups ORDER BY id DESC").fetchall()
+                matching = next((g for g in groups if check_password_hash(g["password_hash"], password)), None)
+                if matching and matching["exams_created"] >= matching["max_exams"]:
+                    raise ValueError("This shared password has reached its exam quota. Use a new password.")
+                if matching:
+                    gid = matching["id"]
+                else:
+                    cur = c.execute("INSERT INTO portal_access_groups(password_hash,max_exams,exams_created,created_at) VALUES(?,?,0,?) RETURNING id",
+                                    (generate_password_hash(password), exam_limit, iso(now())))
+                    gid = cur.fetchone()["id"]
+                code = secrets.token_hex(5).upper()
+                cur = c.execute("INSERT INTO exams(title,duration,review_minutes,status,created_at,exam_code,access_password_hash,access_group_id,class_level) VALUES(?,?,?,'draft',?,?,?,?,?) RETURNING id",
+                                (title, duration, review, iso(now()), code, generate_password_hash(password), gid, grade))
+                exam_id = cur.fetchone()["id"]
+                for n, q in enumerate(questions, 1):
+                    c.execute("INSERT INTO questions(exam_id,q_no,prompt,qtype,options,answer,marks) VALUES(?,?,?,?,?,?,?)",
+                              (exam_id, n, q["question"], q["type"], "|".join(q["options"]), q["answer"], q["marks"]))
+                c.execute("UPDATE portal_access_groups SET exams_created=exams_created+1 WHERE id=?", (gid,))
+            return jsonify(ok=True, exam_id=exam_id, title=title, class_level=grade, exam_code=code,
+                           question_count=len(questions), total_marks=sum(q["marks"] for q in questions),
+                           status="draft", message="Uploaded as draft. Teacher review and approval are required before students can access it.")
+        except (ValueError, TypeError) as ex:
+            return jsonify(ok=False, error=str(ex)), 400
+        except Exception as ex:
+            app.logger.exception("MCP Excel exam import failed")
+            return jsonify(ok=False, error="Could not import the Excel workbook. Check server logs and workbook format."), 500
+
     @app.get("/api/mcp/results")
     @mcp_auth
     def mcp_results():
