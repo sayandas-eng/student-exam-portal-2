@@ -21,11 +21,14 @@ def register(app):
                 "ALTER TABLE students ADD COLUMN IF NOT EXISTS display_name TEXT",
                 "ALTER TABLE students ADD COLUMN IF NOT EXISTS class_level TEXT",
                 "ALTER TABLE exams ADD COLUMN IF NOT EXISTS exam_code TEXT",
+                "ALTER TABLE exams ADD COLUMN IF NOT EXISTS class_level TEXT",
                 "ALTER TABLE exams ADD COLUMN IF NOT EXISTS access_password_hash TEXT",
                 "ALTER TABLE exams ADD COLUMN IF NOT EXISTS archived_at TEXT",
                 "CREATE TABLE IF NOT EXISTS portal_access_groups (id BIGSERIAL PRIMARY KEY, password_hash TEXT NOT NULL, max_exams INTEGER NOT NULL, exams_created INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)",
             ]
             for sql in statements:
+                if not os.environ.get("DATABASE_URL") and sql.startswith("CREATE TABLE IF NOT EXISTS portal_access_groups"):
+                    sql = "CREATE TABLE IF NOT EXISTS portal_access_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, password_hash TEXT NOT NULL, max_exams INTEGER NOT NULL, exams_created INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"
                 try: c.execute(sql)
                 except Exception:
                     # SQLite does not support ADD COLUMN IF NOT EXISTS.
@@ -63,7 +66,7 @@ def register(app):
                 return render_template("login.html", kind="Student")
             with db() as c:
                 exam = c.execute("SELECT * FROM exams WHERE exam_code=? AND status='published' AND archived_at IS NULL",(code,)).fetchone()
-                if not exam or not exam["access_password_hash"] or not check_password_hash(exam["access_password_hash"], password):
+                if not exam or exam["class_level"] != grade or not exam["access_password_hash"] or not check_password_hash(exam["access_password_hash"], password):
                     flash("Invalid exam code or password.")
                     return render_template("login.html", kind="Student")
                 s = c.execute("SELECT * FROM students WHERE display_name=? AND class_level=? ORDER BY id LIMIT 1",(name,grade)).fetchone()
@@ -121,15 +124,18 @@ def register(app):
             with db() as c:
                 # A shared password group is reused only while its teacher-defined exam quota remains.
                 groups=c.execute("SELECT * FROM portal_access_groups ORDER BY id DESC").fetchall()
-                group=next((g for g in groups if check_password_hash(g["password_hash"],password) and g["exams_created"]<g["max_exams"]),None)
-                if not group:
+                matching=next((g for g in groups if check_password_hash(g["password_hash"],password)),None)
+                if matching and matching["exams_created"] >= matching["max_exams"]:
+                    raise ValueError("This shared password has reached its exam limit. Choose a new password.")
+                if matching:
+                    gid=matching["id"]
+                else:
                     cur=c.execute("INSERT INTO portal_access_groups(password_hash,max_exams,exams_created,created_at) VALUES(?,?,0,?) RETURNING id",
                                   (generate_password_hash(password),exam_limit,iso(now())))
                     gid=cur.fetchone()["id"]
-                else: gid=group["id"]
                 code=secrets.token_urlsafe(6).replace("-","").replace("_","").upper()[:10]
-                cur=c.execute("INSERT INTO exams(title,duration,review_minutes,status,created_at,exam_code,access_password_hash,access_group_id) VALUES(?,?,?,'published',?,?,?,?) RETURNING id",
-                              (title,duration,review,iso(now()),code,generate_password_hash(password),gid))
+                cur=c.execute("INSERT INTO exams(title,duration,review_minutes,status,created_at,exam_code,access_password_hash,access_group_id,class_level) VALUES(?,?,?,'published',?,?,?,?,?) RETURNING id",
+                              (title,duration,review,iso(now()),code,generate_password_hash(password),gid,grade))
                 eid=cur.fetchone()["id"]
                 for n,q in enumerate(questions,1):
                     opts="|".join(map(str,q.get("options",[]))) if q.get("options") else ""
