@@ -6,3 +6,4 @@ google-genai>=1.0,<2
 reportlab>=4.2,<5
 mcp>=1.2,<2
 requests>=2.32,<3
+openpyxl>=3.1,<4
